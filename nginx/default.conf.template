@@ -3,6 +3,9 @@ server {
     server_name  _;
     root         /var/www/html;
 
+    absolute_redirect off;
+    port_in_redirect off;
+
     gzip              on;
     gzip_types        text/css application/javascript application/json text/csv;
     gzip_min_length   512;
