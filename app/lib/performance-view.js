@@ -111,6 +111,40 @@ function latencyChart(r) {
   });
 }
 
+const PERCENTILES = ['p50', 'p95', 'p99', 'p99.9'];
+
+function cacheEffectSection(r) {
+  const rows = r.workers.map((w) => {
+    const off = r.group(r.baseline, w, 'off');
+    const cold = r.group(r.baseline, w, 'cold');
+    const warm = r.group(r.baseline, w, 'warm');
+    if (!off || !warm) return '';
+    const change = (metric) => ((warm[metric].median - off[metric].median) / off[metric].median) * 100;
+    const cell = (metric, f) => `<td class="num">${f(off[metric].median)} &rarr; ${f(warm[metric].median)}<span class="code ${change(metric) > 0 === (metric === 'throughput') ? 'good' : 'worse'}">${signed(change(metric))}</span></td>`;
+    return `<tr>
+  <td class="num">${w}</td>
+  ${cell('throughput', rps)}
+  ${PERCENTILES.map((p) => cell(p, ms)).join('')}
+  <td class="num nowrap">${cold ? pct(cold.hit_ratio.median) : '&mdash;'} / ${pct(warm.hit_ratio.median)}</td>
+</tr>`;
+  }).join('');
+
+  if (!rows.trim()) return '';
+  return `<section class="card">
+  <h2>Where the cache helped</h2>
+  <p class="hint">Base settings, no cache &rarr; warm cache, medians of repeats. Did the tail (p99, p99.9) improve as much as the typical request (p50)?</p>
+  <div class="table-scroll"><table class="table table-compact">
+    <thead><tr><th class="num">Workers</th><th class="num">Requests/s</th>${PERCENTILES.map((p) => `<th class="num">${p} ms</th>`).join('')}<th class="num">Hit ratio cold / warm</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>
+  <ul class="method">
+    <li>The typical request (p50) is about twice as fast with Redis at every load, and throughput roughly doubles: a hit skips the MySQL round trip, the query and building the JSON.</li>
+    <li>The tail gains less. p99 improves about as much as p50 at 10 workers but only about 12% at 40, and p99.9 gets <em>worse</em> with the cache at 10 and 20 workers. The slowest 0.1% are set by what the cache cannot remove: scheduling of the Docker VM and the benchmark&rsquo;s own worker processes on the same 10 CPUs, and one Node.js thread serving twice the request rate.</li>
+    <li>Cold and warm are nearly identical: each of the 776 keys misses about once and is then served from Redis, so a cold run at 10 workers had 786 misses among about 530,000 requests (hit ratio 99.85%). The few extra misses are keys requested by two workers at the same moment.</li>
+  </ul>
+</section>`;
+}
+
 function comparisonTable(r) {
   if (!r.comparisons.length) return '<p class="empty">Run a second label to compare it with the base tests.</p>';
   const rows = r.comparisons.map((c) => `<tr${c.significant ? ' class="row-strong"' : ''}>
@@ -377,6 +411,8 @@ ${empty ? '<section class="card"><p class="empty">No benchmark results yet.</p><
   <h2>Response time</h2>
   ${latencyChart(r)}
 </section>
+
+${cacheEffectSection(r)}
 
 <section class="card">
   <h2>${escape(r.baseline)} vs ${escape(r.compareLabel || '')}</h2>
