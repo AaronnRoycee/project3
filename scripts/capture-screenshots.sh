@@ -20,5 +20,8 @@ shot 1-search-form 1280,900 "$base/orders/orders-by-date"
 shot 2-query-results 1280,1200 "$base/orders/orders-by-date/results?start=2023-01-06&end=2023-02-28"
 shot 3-order-detail 1280,1250 "$base/orders/show/10100?format=html"
 shot 4-filtered-results 1280,900 "$base/orders/orders-by-date/results?start=2023-01-06&end=2025-05-31&customer=Diecast&status=Shipped"
+shot 5-performance 1280,2200 "$base/performance"
+shot 6-performance-20-workers 1280,2200 "$base/performance?workers=20"
+shot 7-cache-hit 1280,700 "$base/orders/show/10100?format=html"
 
 ls -lh "$out" | tail -n +2 | awk '{print "  "$9" "$5}'

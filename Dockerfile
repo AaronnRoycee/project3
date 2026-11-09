@@ -6,7 +6,7 @@ ENV PORT=8080
 RUN printf 'exit 101\n' > /usr/sbin/policy-rc.d && chmod +x /usr/sbin/policy-rc.d \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
-      ca-certificates curl gettext-base nginx mysql-server supervisor \
+      ca-certificates curl gettext-base nginx mysql-server redis-server supervisor \
  && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
  && apt-get install -y --no-install-recommends nodejs \
  && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default

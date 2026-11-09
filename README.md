@@ -1,8 +1,9 @@
-# CSE 6332 Project 3 — Customer Service Order Lookup
+# CSE 6332 Projects 3 & 4 — Order Lookup with a Redis Cache
 
 A customer service representative searches the `classicmodels` orders by date
 range, then opens any order for full detail. nginx proxies to a Node.js service
-that queries MySQL, all in one Docker container.
+that queries MySQL through a Redis cache, all in one Docker container.
+Project 4 adds the cache and a `/performance` dashboard of load-test results.
 
 Aaron Pantoja
 
@@ -25,8 +26,10 @@ Then open <http://localhost:8082>. The container is capped at 512 MB in
 | `/orders/orders-by-date/results` | Matching orders; add `&format=json` for JSON |
 | `/orders/orders-by-date/results.csv` | Same query as a CSV download |
 | `/orders/show/:orderNumber` | Order detail as JSON; add `?format=html` for the page |
+| `/performance` | Project 4 load-test dashboard; `?workers=` and `?compare=` select the view |
+| `/performance/runs.csv` | Every measured run as CSV |
 | `/node` | Service and Node version, reached through the proxy block from the assignment |
-| `/healthz` | Reports the order date range, used by the Docker and host health checks |
+| `/healthz` | Reports the order date range and Redis state, used by the Docker and host health checks |
 
 ## Database
 
@@ -76,6 +79,47 @@ actually contains. Every value reaches MySQL as a bound parameter, so
 
 **Consistent presentation.** The interface reuses the Project 1 dark theme and
 is served without any CDN dependency.
+
+## Project 4: Redis cache and performance dashboard
+
+Redis now runs in the same container (`supervisord.conf`, 32 MB,
+`allkeys-lru`, no persistence) and `app/lib/cache.js` puts it in front of
+every query with cache-aside, the same pattern as the course `app.js`:
+
+| Key | TTL | Query |
+|---|---|---|
+| `orders:<start>:<end>:<status>:<customer>` | 300 s | date range search |
+| `details:<order>` | 3600 s | order detail |
+| `meta:statuses`, `meta:bounds` | 3600 s | form choices and date limits |
+
+Every response carries `X-Cache` (`HIT`, `MISS`, `OFF`, `BYPASS`),
+`X-Cache-Key` and `X-Query-Time-Ms`, and the result and detail pages show a
+banner saying whether Redis or MySQL answered and how long it took. Add
+`&nocache=1` (or tick "Skip the Redis cache") to go straight to MySQL. If Redis
+stops, pages are still served from MySQL.
+
+### `/performance`
+
+Reads `app/data/runs.csv`, the output of the course `bench.py`, and shows the
+base tests and the parameter study: headline changes, throughput and latency
+charts (inline SVG, no chart library), the base-vs-parameter table with a
+significance check (lowest–highest ranges must not overlap), a noise check, all
+results, the settings each label ran with, the queries under load, and a live
+query box that shows MISS then HIT on the deployed site.
+
+### Lab mode (local only)
+
+`app/lab.js` serves the same page with controls that drive the course
+container: set one allowed parameter (`general_log`, `max_connections`,
+`appendfsync`, `hz`, `maxmemory-samples`), start a `bench.py` run with chosen
+label, workers, duration, repeats and measurements, watch progress, reset every
+setting, and copy the results into `app/data/runs.csv` for publishing.
+
+    cd app && npm install
+    DB_PASS=<cs_wkr password of the course container> npm run lab
+
+Then open <http://127.0.0.1:8090/performance>. It listens on 127.0.0.1 only
+and is never part of the deployed container's running services.
 
 ## Screenshots
 

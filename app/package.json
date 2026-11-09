@@ -2,13 +2,15 @@
   "name": "cse6332-project3",
   "version": "1.0.0",
   "private": true,
-  "description": "Customer service order lookup over the classicmodels database",
+  "description": "Customer service order lookup over the classicmodels database, cached with Redis",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "lab": "node lab.js"
   },
   "dependencies": {
     "express": "^4.21.2",
-    "mysql2": "^3.11.5"
+    "mysql2": "^3.11.5",
+    "redis": "^6.3.1"
   }
 }

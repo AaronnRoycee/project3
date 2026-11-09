@@ -9,7 +9,16 @@ function escape(value) {
     .replace(/'/g, '&#39;');
 }
 
-function layout({ title, heading, subtitle, body }) {
+const NAV = [
+  { href: '/orders/orders-by-date', label: 'Order Lookup', section: 'lookup' },
+  { href: '/performance', label: 'Cache Performance', section: 'performance' },
+];
+
+function layout({ title, heading, subtitle, body, section = 'lookup', nav = NAV, wide = false }) {
+  const links = nav
+    .map((item) => `<a href="${item.href}"${item.section === section ? ' class="active" aria-current="page"' : ''}>${escape(item.label)}</a>`)
+    .join('');
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -19,18 +28,40 @@ function layout({ title, heading, subtitle, body }) {
 <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
+<nav class="site-nav">${links}</nav>
 <header class="site-header">
   <h1>${escape(heading)}</h1>
   <p class="subtitle">${escape(subtitle)}</p>
 </header>
-<main class="wrap">
+<main class="wrap${wide ? ' wrap-wide' : ''}">
 ${body}
 </main>
 <footer class="site-footer">
-  <p>Aaron Pantoja &middot; CSE 6332 Project 3 &middot; nginx and Node.js querying MySQL in a Docker container</p>
+  <p>Aaron Pantoja &middot; CSE 6332 Projects 3 &amp; 4 &middot; nginx and Node.js querying MySQL through a Redis cache in a Docker container</p>
 </footer>
 </body>
 </html>`;
+}
+
+const CACHE_TEXT = {
+  HIT: (l) => `Answered from Redis in ${l.ms.toFixed(2)} ms${l.expiresIn != null && l.expiresIn >= 0 ? ` &middot; expires in ${l.expiresIn} s` : ''}`,
+  MISS: (l) => `Not in Redis: read from MySQL in ${l.ms.toFixed(2)} ms, now cached for ${l.expiresIn} s`,
+  OFF: (l) => `Cache skipped: read straight from MySQL in ${l.ms.toFixed(2)} ms`,
+  BYPASS: (l) => `Redis did not answer: read from MySQL in ${l.ms.toFixed(2)} ms`,
+};
+
+function cacheBanner(lookup, url) {
+  const cachedUrl = url.replace(/([?&])nocache=1&?/, '$1').replace(/[?&]$/, '');
+  const uncachedUrl = `${cachedUrl}${cachedUrl.includes('?') ? '&' : '?'}nocache=1`;
+  const toggle = lookup.status === 'OFF'
+    ? `<a class="btn btn-small btn-secondary" href="${escape(cachedUrl)}">Run with cache</a>`
+    : `<a class="btn btn-small btn-secondary" href="${escape(uncachedUrl)}">Run without cache</a>`;
+
+  return `<div class="cache-banner cache-${lookup.status.toLowerCase()}">
+  <span class="cache-status">${lookup.status}</span>
+  <span class="cache-text">${CACHE_TEXT[lookup.status](lookup)}<span class="code">key ${escape(lookup.key)}</span></span>
+  <span class="cache-actions"><a class="btn btn-small btn-secondary" href="${escape(url)}">Run again</a>${toggle}</span>
+</div>`;
 }
 
 function searchPage({ start, end, customer, status, statusList, bounds }) {
@@ -66,13 +97,14 @@ function searchPage({ start, end, customer, status, statusList, bounds }) {
       </select>
     </div>
   </div>
-  <p class="hint">Orders on file run from ${escape(bounds.earliest)} to ${escape(bounds.latest)}.</p>
+  <label class="check"><input type="checkbox" name="nocache" value="1"> Skip the Redis cache and query MySQL directly</label>
+  <p class="hint">Orders on file run from ${escape(bounds.earliest)} to ${escape(bounds.latest)}. Results are cached in Redis for 300 seconds; each result page shows whether Redis or MySQL answered.</p>
   <button type="submit" class="btn">Find Orders</button>
 </form>`,
   });
 }
 
-function resultsPage({ orders, start, end, customer, status, csvQuery }) {
+function resultsPage({ orders, start, end, customer, status, query, lookup }) {
   const filters = [`${escape(start)} to ${escape(end)}`];
   if (customer) filters.push(`customer contains "${escape(customer)}"`);
   if (status) filters.push(`status ${escape(status)}`);
@@ -105,16 +137,17 @@ function resultsPage({ orders, start, end, customer, status, csvQuery }) {
     heading: `${orders.length} order${orders.length === 1 ? '' : 's'} found`,
     subtitle: filters.join(' \u00b7 '),
     body: `<div class="card">
+  ${cacheBanner(lookup, `/orders/orders-by-date/results?${query}${lookup.status === 'OFF' ? '&nocache=1' : ''}`)}
   <div class="toolbar">
-    <a class="btn btn-secondary" href="/orders/orders-by-date">New search</a>
-    ${orders.length ? `<a class="btn btn-secondary" href="/orders/orders-by-date/results.csv?${csvQuery}">Download CSV</a>` : ''}
+    <a class="btn btn-secondary" href="/orders/orders-by-date?${escape(query)}">New search</a>
+    ${orders.length ? `<a class="btn btn-secondary" href="/orders/orders-by-date/results.csv?${escape(query)}">Download CSV</a>` : ''}
   </div>
   ${table}
 </div>`,
   });
 }
 
-function detailPage(order) {
+function detailPage(order, lookup) {
   const rows = order.items
     .map(
       (item) => `<tr>
@@ -131,6 +164,7 @@ function detailPage(order) {
     heading: `Order #${order.orderNumber}`,
     subtitle: `${order.status} \u00b7 ordered ${order.orderDate}`,
     body: `<div class="card">
+  ${cacheBanner(lookup, `/orders/show/${order.orderNumber}?format=html${lookup.status === 'OFF' ? '&nocache=1' : ''}`)}
   <div class="toolbar">
     <a class="btn btn-secondary" href="/orders/orders-by-date">New search</a>
     <a class="btn btn-secondary" href="/orders/show/${order.orderNumber}?format=json">View JSON</a>
@@ -178,4 +212,4 @@ function errorPage({ title, message }) {
   });
 }
 
-module.exports = { escape, searchPage, resultsPage, detailPage, errorPage };
+module.exports = { escape, layout, searchPage, resultsPage, detailPage, errorPage };
