@@ -1,4 +1,12 @@
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const money = require('./money');
+
+const CSS_VERSION = crypto.createHash('sha1')
+  .update(fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'app.css')))
+  .digest('hex')
+  .slice(0, 10);
 
 function escape(value) {
   return String(value ?? '')
@@ -25,7 +33,8 @@ function layout({ title, heading, subtitle, body, section = 'lookup', nav = NAV,
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escape(title)}</title>
-<link rel="stylesheet" href="/css/app.css">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="/css/app.css?v=${CSS_VERSION}">
 </head>
 <body>
 <nav class="site-nav">${links}</nav>

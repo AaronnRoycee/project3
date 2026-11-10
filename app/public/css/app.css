@@ -11,6 +11,8 @@
   --radius: 10px;
 }
 
+:root { color-scheme: dark; }
+
 * { box-sizing: border-box; }
 
 body {
@@ -207,7 +209,7 @@ input:focus, select:focus {
   display: block;
   color: var(--text-muted);
   font-size: 0.78rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Cascadia Mono", monospace;
 }
 
 .pill {
@@ -423,7 +425,7 @@ input:focus, select:focus {
 .inspector-tools { align-items: center; margin: 1rem 0; }
 .inspector-tools .check { margin: 0; }
 .inspector-tools .muted { font-size: 0.85rem; }
-.code-cell { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; word-break: break-all; }
+.code-cell { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Cascadia Mono", monospace; font-size: 0.8rem; word-break: break-all; }
 #timeit-table { margin-top: 0.5rem; }
 
 .query-grid {
@@ -436,7 +438,7 @@ input:focus, select:focus {
 .query h3, .lab h3 { margin: 0 0 0.25rem; font-size: 0.95rem; }
 .lab h3 { margin: 1.5rem 0 0.6rem; }
 
-pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+pre, code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Cascadia Mono", monospace; }
 code { font-size: 0.88em; color: var(--text); }
 
 .query pre, .log {
