@@ -10,6 +10,8 @@ const client = createClient({
 client.on('error', () => {});
 if (ENABLED) client.connect().catch(() => {});
 
+const own = { hits: 0, misses: 0 };
+
 function stopwatch() {
   const started = process.hrtime.bigint();
   return () => Number(process.hrtime.bigint() - started) / 1e6;
@@ -24,7 +26,9 @@ async function cached(key, ttl, load, { bypass = false } = {}) {
       const hit = await client.get(key);
       if (hit !== null) {
         const ms = elapsed();
-        return { value: JSON.parse(hit), status: 'HIT', ms, key, expiresIn: await client.ttl(key).catch(() => null) };
+        const expiresIn = await client.ttl(key).catch(() => null);
+        if (expiresIn != null) own[expiresIn === -2 ? 'misses' : 'hits'] += 1;
+        return { value: JSON.parse(hit), status: 'HIT', ms, key, expiresIn };
       }
     } catch {
       status = 'BYPASS';
@@ -54,4 +58,37 @@ async function healthy() {
   }
 }
 
-module.exports = { cached, healthy, ENABLED };
+function infoField(text, name) {
+  const match = text.match(new RegExp(`^${name}:(.*)$`, 'm'));
+  return match ? match[1].trim() : null;
+}
+
+async function inspect({ limit = 200 } = {}) {
+  const [stats, memory, size] = await Promise.all([client.info('stats'), client.info('memory'), client.dbSize()]);
+  const keys = [];
+  for await (const batch of client.scanIterator({ MATCH: '*', COUNT: 100 })) {
+    keys.push(...[].concat(batch));
+    if (keys.length >= limit) break;
+  }
+  const hits = Math.max(0, Number(infoField(stats, 'keyspace_hits')) - own.hits);
+  const misses = Math.max(0, Number(infoField(stats, 'keyspace_misses')) - own.misses);
+  const ttls = await Promise.all(keys.slice(0, limit).map((key) => client.ttl(key)));
+  for (const ttl of ttls) own[ttl === -2 ? 'misses' : 'hits'] += 1;
+  return {
+    hits,
+    misses,
+    hitRatio: hits + misses ? hits / (hits + misses) : null,
+    evicted: Number(infoField(stats, 'evicted_keys')),
+    keyCount: size,
+    memory: infoField(memory, 'used_memory_human'),
+    keys: keys.slice(0, limit).map((key, i) => ({ key, ttl: ttls[i] })).sort((a, b) => a.key.localeCompare(b.key)),
+  };
+}
+
+async function clear() {
+  await client.flushDb();
+  await client.configResetStat();
+  Object.assign(own, { hits: 0, misses: 0 });
+}
+
+module.exports = { cached, healthy, inspect, clear, ENABLED };

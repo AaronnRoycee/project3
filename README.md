@@ -28,6 +28,9 @@ Then open <http://localhost:8082>. The container is capped at 512 MB in
 | `/orders/show/:orderNumber` | Order detail as JSON; add `?format=html` for the page |
 | `/performance` | Project 4 load-test dashboard; `?workers=` and `?compare=` select the view |
 | `/performance/runs.csv` | Every measured run as CSV |
+| `/performance/cache/stats` | Cache inspector: hits, misses, hit ratio, keys and TTLs (JSON) |
+| `/performance/cache/clear` | `POST`: empty Redis and reset its counters (cold start) |
+| `/performance/cache/timeit?start=&end=&n=` | Time one search N times from MySQL and N times through Redis (JSON) |
 | `/node` | Service and Node version, reached through the proxy block from the assignment |
 | `/healthz` | Reports the order date range and Redis state, used by the Docker and host health checks |
 
@@ -104,8 +107,11 @@ Reads `app/data/runs.csv`, the output of the course `bench.py`, and shows the
 base tests and the parameter study: headline changes, throughput and latency
 charts (inline SVG, no chart library), the base-vs-parameter table with a
 significance check (lowest–highest ranges must not overlap), a noise check, all
-results, the settings each label ran with, the queries under load, and a live
-query box that shows MISS then HIT on the deployed site.
+results, the settings each label ran with, the queries under load, a live
+query box that shows MISS then HIT on the deployed site, and a cache inspector
+(hit ratio, every key with its TTL, a clear-cache button and a MySQL-vs-Redis
+timing test). The inspector discounts its own `TTL` lookups so they do not
+inflate the hit ratio.
 
 ### Lab mode (local only)
 

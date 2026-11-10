@@ -269,7 +269,7 @@ function queriesSection() {
 }
 
 function liveSection(bounds) {
-  return `<section class="card">
+  return `<section class="card" id="live">
   <h2>Try the cache live</h2>
   <p class="hint">Runs the order search on this server and reports who answered. The first request for a range is a MISS (MySQL, then stored); repeat it for a HIT from Redis. Times cover the cache and database step only.</p>
   <form id="live-form" class="field-row live-form">
@@ -305,7 +305,119 @@ function liveSection(bounds) {
         if (i === 2) cell.innerHTML = '<span class="pill pill-cache-' + who.toLowerCase() + '">' + who + '</span>';
       });
       table.hidden = false;
+      if (window.refreshCache) window.refreshCache();
     });
+  });
+})();
+</script>`;
+}
+
+function inspectorSection(bounds) {
+  return `<section class="card" id="inspector">
+  <h2>Cache inspector</h2>
+  <p class="hint">What Redis on this server holds right now, read with <code>INFO stats</code>, <code>SCAN</code> and <code>TTL</code>. Hit ratio = hits &divide; (hits + misses) since the counters were last reset. Clear the cache to start cold, then run queries above or on the Order Lookup page and watch keys appear and their TTLs count down.</p>
+  <div class="stats" id="cache-stats">
+    <div class="stat"><span class="stat-label">Hits</span><span class="stat-value" data-stat="hits">&ndash;</span></div>
+    <div class="stat"><span class="stat-label">Misses</span><span class="stat-value" data-stat="misses">&ndash;</span></div>
+    <div class="stat stat-strong"><span class="stat-label">Hit ratio</span><span class="stat-value" data-stat="ratio">&ndash;</span><span class="meter meter-wide"><span data-stat="meter" style="width:0"></span></span></div>
+    <div class="stat"><span class="stat-label">Keys cached</span><span class="stat-value" data-stat="keys">&ndash;</span><span class="stat-note" data-stat="memory"></span></div>
+  </div>
+  <div class="toolbar inspector-tools">
+    <button class="btn btn-secondary btn-small" type="button" id="cache-refresh">Refresh</button>
+    <button class="btn btn-small" type="button" id="cache-clear">Clear cache (cold start)</button>
+    <label class="check"><input type="checkbox" id="cache-auto" checked> Refresh every 2 s</label>
+    <span class="muted" id="cache-note"></span>
+  </div>
+  <div class="table-scroll"><table class="table table-compact" id="cache-keys">
+    <thead><tr><th>Key</th><th>Query</th><th class="num">TTL left</th></tr></thead>
+    <tbody><tr><td colspan="3" class="muted">Loading&hellip;</td></tr></tbody>
+  </table></div>
+
+  <h2>Time it: the same query with and without Redis</h2>
+  <p class="hint">Runs one date-range search N times straight from MySQL (OFF), then N times through the cache (the first is a MISS unless already cached, the rest are HITs), all on this server. Times cover the cache and database step only, so the network to your browser is not included.</p>
+  <form id="timeit-form" class="field-row live-form">
+    <div class="field"><label for="timeit-start">Start</label><input type="date" id="timeit-start" value="${escape(bounds.earliest)}" min="${escape(bounds.earliest)}" max="${escape(bounds.latest)}" required></div>
+    <div class="field"><label for="timeit-end">End</label><input type="date" id="timeit-end" value="${escape(bounds.latest)}" min="${escape(bounds.earliest)}" max="${escape(bounds.latest)}" required></div>
+    <div class="field"><label for="timeit-n">Requests each</label><input type="number" id="timeit-n" value="20" min="1" max="50"></div>
+    <div class="field field-actions"><button class="btn" type="submit">Time it</button></div>
+  </form>
+  <div class="table-scroll"><table class="table table-compact" id="timeit-table" hidden>
+    <thead><tr><th>Answered by</th><th class="num">Requests</th><th class="num">p50 ms</th><th class="num">p95 ms</th><th class="num">max ms</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <p class="hint" id="timeit-summary"></p>
+</section>
+<script>
+(function () {
+  var section = document.getElementById('inspector');
+  var note = document.getElementById('cache-note');
+  var body = document.getElementById('cache-keys').tBodies[0];
+  var auto = document.getElementById('cache-auto');
+  function stat(name) { return section.querySelector('[data-stat="' + name + '"]'); }
+  function kind(key) {
+    if (key.indexOf('details:') === 0) return 'order line items';
+    if (key.indexOf('orders:') === 0) return 'date range search';
+    return 'form data';
+  }
+  function cell(row, text, cls) { var c = row.insertCell(); c.textContent = text; if (cls) c.className = cls; return c; }
+  function refresh() {
+    return fetch('/performance/cache/stats').then(function (r) { return r.json(); }).then(function (s) {
+      if (s.error) { note.textContent = s.error; return; }
+      stat('hits').textContent = s.hits.toLocaleString();
+      stat('misses').textContent = s.misses.toLocaleString();
+      stat('ratio').textContent = s.hitRatio == null ? '\\u2013' : (s.hitRatio * 100).toFixed(1) + '%';
+      stat('meter').style.width = s.hitRatio == null ? '0' : (s.hitRatio * 100).toFixed(1) + '%';
+      stat('keys').textContent = s.keyCount;
+      stat('memory').textContent = 'Redis memory ' + s.memory + (s.evicted ? ', ' + s.evicted + ' evicted' : '');
+      body.innerHTML = '';
+      if (!s.keys.length) { var empty = body.insertRow(); var c = cell(empty, 'Empty: the next request for any key is a MISS.', 'muted'); c.colSpan = 3; }
+      s.keys.forEach(function (k) {
+        var row = body.insertRow();
+        cell(row, k.key, 'code-cell');
+        cell(row, kind(k.key));
+        cell(row, k.ttl < 0 ? 'no expiry' : k.ttl + ' s', 'num');
+      });
+      note.textContent = 'updated ' + new Date().toLocaleTimeString();
+    }).catch(function () { note.textContent = 'Could not reach the server.'; });
+  }
+  window.refreshCache = refresh;
+  document.getElementById('cache-refresh').addEventListener('click', refresh);
+  document.getElementById('cache-clear').addEventListener('click', function () {
+    fetch('/performance/cache/clear', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (r) {
+      note.textContent = r.error || 'Cache cleared and counters reset.';
+      refresh();
+    });
+  });
+  setInterval(function () { if (auto.checked && !document.hidden) refresh(); }, 2000);
+  refresh();
+
+  var form = document.getElementById('timeit-form');
+  var table = document.getElementById('timeit-table');
+  var summary = document.getElementById('timeit-summary');
+  var button = form.querySelector('button');
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    var params = new URLSearchParams({ start: form.querySelector('#timeit-start').value, end: form.querySelector('#timeit-end').value, n: form.querySelector('#timeit-n').value });
+    button.disabled = true;
+    summary.textContent = 'Running\\u2026';
+    fetch('/performance/cache/timeit?' + params).then(function (r) { return r.json(); }).then(function (data) {
+      button.disabled = false;
+      if (data.error) { summary.textContent = data.error; return; }
+      var tbody = table.tBodies[0];
+      tbody.innerHTML = '';
+      var p50 = {};
+      data.results.forEach(function (r) {
+        p50[r.status] = r.p50;
+        var row = tbody.insertRow();
+        row.insertCell().innerHTML = '<span class="pill pill-cache-' + r.status.toLowerCase() + '">' + r.status + '</span>';
+        [r.count, r.p50.toFixed(3), r.p95.toFixed(3), r.max.toFixed(3)].forEach(function (v) { cell(row, v, 'num'); });
+      });
+      table.hidden = false;
+      summary.textContent = p50.OFF && p50.HIT
+        ? 'Key ' + data.key + ': a Redis HIT took ' + p50.HIT.toFixed(3) + ' ms at the median against ' + p50.OFF.toFixed(3) + ' ms from MySQL, ' + (p50.OFF / p50.HIT).toFixed(1) + '\\u00d7 faster.'
+        : 'Key ' + data.key + '.';
+      refresh();
+    }).catch(function () { button.disabled = false; summary.textContent = 'Could not reach the server.'; });
   });
 })();
 </script>`;
@@ -401,6 +513,7 @@ function render({ report: r, bounds, live = false, lab = null, nav }) {
   const body = `${lab ? labPanel(lab) : ''}
 ${empty ? '<section class="card"><p class="empty">No benchmark results yet.</p></section>' : `<section class="card">
   <h2>Findings at a glance</h2>
+  ${live ? '<p class="hint"><a class="btn btn-secondary btn-small" href="#live">Live cache demo</a> <a class="btn btn-secondary btn-small" href="#inspector">Cache inspector</a></p>' : ''}
   ${selectors(r)}
   ${headline(r)}
 </section>
@@ -431,7 +544,7 @@ ${noiseSection(r)}
 </section>`}
 
 ${queriesSection()}
-${live && bounds ? liveSection(bounds) : ''}
+${live && bounds ? liveSection(bounds) + inspectorSection(bounds) : ''}
 ${empty ? '' : methodSection(r)}`;
 
   return layout({

@@ -419,6 +419,12 @@ input:focus, select:focus {
 }
 
 .meter span { display: block; height: 100%; background: var(--ok); }
+.meter-wide { width: 100%; margin-top: 0.35rem; }
+.inspector-tools { align-items: center; margin: 1rem 0; }
+.inspector-tools .check { margin: 0; }
+.inspector-tools .muted { font-size: 0.85rem; }
+.code-cell { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; word-break: break-all; }
+#timeit-table { margin-top: 0.5rem; }
 
 .query-grid {
   display: grid;

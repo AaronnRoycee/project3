@@ -6,7 +6,7 @@ const money = require('./lib/money');
 const views = require('./lib/views');
 const perf = require('./lib/perf');
 const performanceView = require('./lib/performance-view');
-const { cached, healthy } = require('./lib/cache');
+const { cached, healthy, inspect, clear } = require('./lib/cache');
 
 const app = express();
 const PORT = Number(process.env.APP_PORT || 3000);
@@ -219,6 +219,68 @@ app.get('/performance', async (req, res, next) => {
     const runs = perf.parseCsv(await fs.promises.readFile(RESULTS_FILE, 'utf8'));
     const bounds = await dateBounds();
     res.type('html').send(performanceView.render({ report: perf.report(runs, req.query), bounds, live: true }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+function percentile(sorted, p) {
+  return sorted.length ? sorted[Math.max(0, Math.ceil((p / 100) * sorted.length) - 1)] : null;
+}
+
+function summarizeTimes(times) {
+  const sorted = [...times].sort((a, b) => a - b);
+  const round = (v) => (v == null ? null : Number(v.toFixed(3)));
+  return { count: sorted.length, p50: round(percentile(sorted, 50)), p95: round(percentile(sorted, 95)), max: round(sorted[sorted.length - 1]) };
+}
+
+app.get('/performance/cache/stats', async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store').json(await inspect());
+  } catch (error) {
+    res.status(503).json({ error: 'Redis is not answering.' });
+  }
+});
+
+let lastClear = 0;
+app.post('/performance/cache/clear', async (req, res) => {
+  if (Date.now() - lastClear < 1000) return res.status(429).json({ error: 'Cleared a moment ago.' });
+  lastClear = Date.now();
+  try {
+    await clear();
+    res.json({ cleared: true });
+  } catch (error) {
+    res.status(503).json({ error: 'Redis is not answering.' });
+  }
+});
+
+app.get('/performance/cache/timeit', async (req, res, next) => {
+  try {
+    const start = String(req.query.start || '');
+    const end = String(req.query.end || '');
+    const n = Number(req.query.n || 20);
+    if (!isValidDate(start) || !isValidDate(end) || start > end) return res.status(400).json({ error: 'Enter a valid date range.' });
+    if (!Number.isInteger(n) || n < 1 || n > 50) return res.status(400).json({ error: 'Repeats must be 1 to 50.' });
+
+    const filters = { start, end, customer: '', status: '' };
+    const load = () => queries.findOrders(filters);
+    const key = ordersKey(filters);
+    const times = { OFF: [], MISS: [], HIT: [], BYPASS: [] };
+
+    for (let i = 0; i < n; i += 1) {
+      const lookup = await cached(key, TTL_ORDERS, load, { bypass: true });
+      times[lookup.status].push(lookup.ms);
+    }
+    for (let i = 0; i < n; i += 1) {
+      const lookup = await cached(key, TTL_ORDERS, load);
+      times[lookup.status].push(lookup.ms);
+    }
+
+    res.set('Cache-Control', 'no-store').json({
+      key,
+      n,
+      results: Object.entries(times).filter(([, list]) => list.length).map(([status, list]) => ({ status, ...summarizeTimes(list) })),
+    });
   } catch (error) {
     next(error);
   }
