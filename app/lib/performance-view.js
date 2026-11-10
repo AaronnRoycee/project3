@@ -20,7 +20,7 @@ const SETTING_NAMES = {
 const LOG_LABEL = 'general_log=ON';
 
 function explain(html) {
-  return `<div class="explain"><span class="explain-label">In plain English</span>${html}</div>`;
+  return `<div class="explain">${html}</div>`;
 }
 
 function change(from, to) {

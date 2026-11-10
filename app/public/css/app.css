@@ -380,16 +380,6 @@ input:focus, select:focus {
   line-height: 1.55;
 }
 
-.explain-label {
-  display: block;
-  margin-bottom: 0.25rem;
-  color: var(--ok);
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
 .story { margin: 0; padding-left: 1.4rem; font-size: 1.08rem; line-height: 1.6; }
 .story li { margin-bottom: 0.65rem; padding-left: 0.25rem; }
 .story strong { color: #fff; }
