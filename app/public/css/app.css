@@ -370,6 +370,36 @@ input:focus, select:focus {
 .stat-value { font-size: 1.9rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .stat-note { color: var(--text-muted); font-size: 0.82rem; }
 
+.explain {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border-left: 3px solid var(--ok);
+  border-radius: 6px;
+  background: rgba(63, 169, 106, 0.08);
+  font-size: 1.02rem;
+  line-height: 1.55;
+}
+
+.explain-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--ok);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.story { margin: 0; padding-left: 1.4rem; font-size: 1.08rem; line-height: 1.6; }
+.story li { margin-bottom: 0.65rem; padding-left: 0.25rem; }
+.story strong { color: #fff; }
+
+.glossary { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.75rem; }
+.glossary summary { cursor: pointer; color: var(--text-muted); font-size: 0.9rem; }
+.glossary dl { display: grid; grid-template-columns: 13rem 1fr; gap: 0.4rem 1rem; margin: 0.75rem 0 0; font-size: 0.92rem; }
+.glossary dt { color: var(--text); font-weight: 600; }
+.glossary dd { margin: 0; color: var(--text-muted); }
+
 .chart { margin: 0.5rem 0 1.25rem; }
 .chart figcaption { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.5rem; }
 .chart svg { width: 100%; height: auto; display: block; }
@@ -473,4 +503,5 @@ code { font-size: 0.88em; color: var(--text); }
   .detail { grid-template-columns: 1fr; }
   .detail dd { margin-bottom: 0.5rem; }
   .selector-label { display: block; margin-bottom: 0.25rem; }
+  .glossary dl { grid-template-columns: 1fr; }
 }
